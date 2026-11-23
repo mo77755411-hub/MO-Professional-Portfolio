@@ -1,0 +1,19 @@
+
+{
+  "expo": {
+    "name": "MO Professional Portfolio",
+    "slug": "mo-professional-portfolio",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#0B1020"
+    },
+    "android": {
+      "package": "com.mofathy.professionalportfolio",
+      "adaptiveIcon": {
+        "backgroundColor": "#0B1020"
+      }
+    }
+  }
+}
