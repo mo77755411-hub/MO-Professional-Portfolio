@@ -1,5 +1,4 @@
-
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   SafeAreaView,
   ScrollView,
@@ -8,86 +7,149 @@ import {
   Text,
   TextInput,
   View,
-  Pressable
+  Pressable,
+  Alert
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const certificates = [
-  {
-    id: "1",
-    title: "Advanced Hematology Workshop",
-    provider: "Medical Education Center",
-    category: "Hematology",
-    date: "2026"
-  },
-  {
-    id: "2",
-    title: "Quality Management in Medical Laboratories",
-    provider: "Professional Training Institute",
-    category: "Quality",
-    date: "2026"
-  },
-  {
-    id: "3",
-    title: "Clinical Chemistry Fundamentals",
-    provider: "Clinical Education Academy",
-    category: "Clinical Chemistry",
-    date: "2025"
-  },
-  {
-    id: "4",
-    title: "Molecular Diagnostics Essentials",
-    provider: "Medical Science Academy",
-    category: "Molecular Biology",
-    date: "2025"
-  },
-  {
-    id: "5",
-    title: "Blood Transfusion Practice",
-    provider: "Laboratory Training Center",
-    category: "Hematology",
-    date: "2026"
-  }
-];
+type Certificate = {
+  id: string;
+  title: string;
+  provider: string;
+  category: string;
+  date: string;
+};
+
+const STORAGE_KEY = "MO_CERTIFICATES";
 
 const categories = [
-  "All",
   "Hematology",
   "Quality",
   "Clinical Chemistry",
   "Molecular Biology",
-  "Microbiology"
+  "Microbiology",
+  "Other"
 ];
 
 export default function App() {
   const [screen, setScreen] = useState("home");
+  const [certificates, setCertificates] = useState<Certificate[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
-  const [selected, setSelected] = useState(null);
+  const [selected, setSelected] = useState<Certificate | null>(null);
+
+  const [title, setTitle] = useState("");
+  const [provider, setProvider] = useState("");
+  const [year, setYear] = useState("2026");
+  const [newCategory, setNewCategory] = useState("Hematology");
+
+  useEffect(() => {
+    const loadCertificates = async () => {
+      try {
+        const saved = await AsyncStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          setCertificates(JSON.parse(saved));
+        }
+      } catch (error) {
+        Alert.alert("Error", "Could not load certificates.");
+      } finally {
+        setLoaded(true);
+      }
+    };
+
+    loadCertificates();
+  }, []);
+
+  useEffect(() => {
+    if (!loaded) return;
+
+    AsyncStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(certificates)
+    ).catch(() => {
+      Alert.alert("Error", "Could not save certificates.");
+    });
+  }, [certificates, loaded]);
 
   const filtered = useMemo(() => {
     return certificates.filter(item => {
       const matchesCategory =
         category === "All" || item.category === category;
 
+      const search = query.toLowerCase();
+
       const matchesSearch =
-        item.title.toLowerCase().includes(query.toLowerCase()) ||
-        item.provider.toLowerCase().includes(query.toLowerCase());
+        item.title.toLowerCase().includes(search) ||
+        item.provider.toLowerCase().includes(search);
 
       return matchesCategory && matchesSearch;
     });
-  }, [query, category]);
+  }, [certificates, query, category]);
 
-  const openCertificate = item => {
-    setSelected(item);
-    setScreen("details");
+  const addCertificate = () => {
+    if (!title.trim() || !provider.trim() || !year.trim()) {
+      Alert.alert("Missing information", "Please complete all fields.");
+      return;
+    }
+
+    const newCertificate: Certificate = {
+      id: Date.now().toString(),
+      title: title.trim(),
+      provider: provider.trim(),
+      category: newCategory,
+      date: year.trim()
+    };
+
+    setCertificates(previous => [
+      newCertificate,
+      ...previous
+    ]);
+
+    setTitle("");
+    setProvider("");
+    setYear("2026");
+    setNewCategory("Hematology");
+
+    setScreen("library");
   };
+
+  const deleteCertificate = (id: string) => {
+    Alert.alert(
+      "Delete certificate",
+      "Are you sure you want to delete this certificate?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            setCertificates(previous =>
+              previous.filter(item => item.id !== id)
+            );
+            setSelected(null);
+            setScreen("library");
+          }
+        }
+      ]
+    );
+  };
+
+  const button = (label: string, action: () => void) => (
+    <Pressable style={styles.button} onPress={action}>
+      <Text style={styles.buttonText}>{label}</Text>
+    </Pressable>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.brand}>MO • PROFESSIONAL PORTFOLIO</Text>
+        <Text style={styles.brand}>
+          MO • PROFESSIONAL PORTFOLIO
+        </Text>
 
         {screen === "home" && (
           <>
@@ -96,14 +158,22 @@ export default function App() {
             </Text>
 
             <View style={styles.hero}>
-              <Text style={styles.label}>PROFESSIONAL OVERVIEW</Text>
-              <Text style={styles.name}>Mohamed Fathy Amr</Text>
+              <Text style={styles.label}>
+                PROFESSIONAL OVERVIEW
+              </Text>
+              <Text style={styles.name}>
+                Mohamed Fathy Amr
+              </Text>
               <Text style={styles.role}>
                 Medical Laboratory Specialist
               </Text>
               <View style={styles.line} />
-              <Text style={styles.archive}>44 MB CERTIFICATE ARCHIVE</Text>
-              <Text style={styles.motto}>✦ LIFELONG LEARNER</Text>
+              <Text style={styles.archive}>
+                44 MB CERTIFICATE ARCHIVE
+              </Text>
+              <Text style={styles.motto}>
+                ✦ LIFELONG LEARNER
+              </Text>
             </View>
 
             <Text style={styles.section}>Your Portfolio</Text>
@@ -123,26 +193,8 @@ export default function App() {
 
             <Text style={styles.section}>Explore</Text>
 
-            <Pressable
-              style={styles.menu}
-              onPress={() => setScreen("library")}
-            >
-              <Text style={styles.menuText}>
-                ▤   Certificate Library
-              </Text>
-              <Text style={styles.arrow}>›</Text>
-            </Pressable>
-
-            {[
-              "✦   Professional Memberships",
-              "◷   CME Tracker",
-              "🏆   Achievements"
-            ].map(item => (
-              <View style={styles.menu} key={item}>
-                <Text style={styles.menuText}>{item}</Text>
-                <Text style={styles.arrow}>›</Text>
-              </View>
-            ))}
+            {button("▤  Certificate Library", () => setScreen("library"))}
+            {button("＋  Add New Certificate", () => setScreen("add"))}
 
             <Text style={styles.footer}>
               Document the journey. Demonstrate the growth.
@@ -153,18 +205,24 @@ export default function App() {
         {screen === "library" && (
           <>
             <Pressable onPress={() => setScreen("home")}>
-              <Text style={styles.back}>‹  Back to Dashboard</Text>
+              <Text style={styles.back}>‹ Back to Dashboard</Text>
             </Pressable>
 
-            <Text style={styles.heading}>Certificate{"\n"}Library</Text>
+            <Text style={styles.heading}>
+              Certificate{"\n"}Library
+            </Text>
 
             <View style={styles.libraryHero}>
               <Text style={styles.number}>195</Text>
-              <Text style={styles.role}>Professional Certificates</Text>
+              <Text style={styles.role}>
+                Professional Certificates
+              </Text>
               <Text style={styles.label}>
-                YOUR PROFESSIONAL LEARNING ARCHIVE
+                {certificates.length} RECORDS IN THIS APP
               </Text>
             </View>
+
+            {button("＋ Add Certificate", () => setScreen("add"))}
 
             <TextInput
               style={styles.search}
@@ -176,12 +234,8 @@ export default function App() {
 
             <Text style={styles.section}>Categories</Text>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.filters}
-            >
-              {categories.map(item => (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {["All", ...categories].map(item => (
                 <Pressable
                   key={item}
                   onPress={() => setCategory(item)}
@@ -190,14 +244,7 @@ export default function App() {
                     category === item && styles.activeFilter
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.filterText,
-                      category === item && styles.activeFilterText
-                    ]}
-                  >
-                    {item}
-                  </Text>
+                  <Text style={styles.filterText}>{item}</Text>
                 </Pressable>
               ))}
             </ScrollView>
@@ -205,34 +252,30 @@ export default function App() {
             <View style={styles.resultRow}>
               <Text style={styles.section}>Certificates</Text>
               <Text style={styles.resultCount}>
-                {filtered.length} results
+                {filtered.length} records
               </Text>
             </View>
-
-            <Text style={styles.notice}>
-              Preview records – sample data for testing.
-            </Text>
 
             {filtered.map(item => (
               <Pressable
                 key={item.id}
                 style={styles.certificate}
-                onPress={() => openCertificate(item)}
+                onPress={() => {
+                  setSelected(item);
+                  setScreen("details");
+                }}
               >
-                <View style={styles.certificateIcon}>
-                  <Text style={styles.certificateIconText}>▤</Text>
-                </View>
-
                 <View style={styles.certificateInfo}>
                   <Text style={styles.certificateTitle}>
                     {item.title}
                   </Text>
-                  <Text style={styles.provider}>{item.provider}</Text>
+                  <Text style={styles.provider}>
+                    {item.provider}
+                  </Text>
                   <Text style={styles.categoryTag}>
-                    {item.category}  •  {item.date}
+                    {item.category} • {item.date}
                   </Text>
                 </View>
-
                 <Text style={styles.arrow}>›</Text>
               </Pressable>
             ))}
@@ -245,13 +288,73 @@ export default function App() {
           </>
         )}
 
+        {screen === "add" && (
+          <>
+            <Pressable onPress={() => setScreen("library")}>
+              <Text style={styles.back}>‹ Back to Library</Text>
+            </Pressable>
+
+            <Text style={styles.heading}>
+              Add New{"\n"}Certificate
+            </Text>
+
+            <Text style={styles.fieldLabel}>Certificate Title</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter certificate name"
+              placeholderTextColor="#8290A8"
+              value={title}
+              onChangeText={setTitle}
+            />
+
+            <Text style={styles.fieldLabel}>Issuing Organization</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter provider name"
+              placeholderTextColor="#8290A8"
+              value={provider}
+              onChangeText={setProvider}
+            />
+
+            <Text style={styles.fieldLabel}>Year</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="2026"
+              placeholderTextColor="#8290A8"
+              keyboardType="numeric"
+              value={year}
+              onChangeText={setYear}
+            />
+
+            <Text style={styles.fieldLabel}>Specialty</Text>
+            <View style={styles.categoryList}>
+              {categories.map(item => (
+                <Pressable
+                  key={item}
+                  onPress={() => setNewCategory(item)}
+                  style={[
+                    styles.filter,
+                    newCategory === item && styles.activeFilter
+                  ]}
+                >
+                  <Text style={styles.filterText}>{item}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {button("Save Certificate", addCertificate)}
+          </>
+        )}
+
         {screen === "details" && selected && (
           <>
             <Pressable onPress={() => setScreen("library")}>
-              <Text style={styles.back}>‹  Back to Library</Text>
+              <Text style={styles.back}>‹ Back to Library</Text>
             </Pressable>
 
-            <Text style={styles.heading}>Certificate{"\n"}Details</Text>
+            <Text style={styles.heading}>
+              Certificate{"\n"}Details
+            </Text>
 
             <View style={styles.hero}>
               <Text style={styles.label}>CERTIFICATE INFORMATION</Text>
@@ -266,6 +369,15 @@ export default function App() {
               <Text style={styles.role}>Year</Text>
               <Text style={styles.menuText}>{selected.date}</Text>
             </View>
+
+            <Pressable
+              style={styles.deleteButton}
+              onPress={() => deleteCertificate(selected.id)}
+            >
+              <Text style={styles.buttonText}>
+                Delete Certificate
+              </Text>
+            </Pressable>
           </>
         )}
       </ScrollView>
@@ -278,7 +390,7 @@ const styles = StyleSheet.create({
   content: { padding: 22, paddingTop: 30 },
   brand: { color: "#91A7C8", fontSize: 10, letterSpacing: 2 },
   heading: { color: "white", fontSize: 29, fontWeight: "bold", marginVertical: 25 },
-  hero: { backgroundColor: "#172744", padding: 23, borderRadius: 22, marginBottom: 30 },
+  hero: { backgroundColor: "#172744", padding: 23, borderRadius: 22, marginBottom: 25 },
   label: { color: "#9FB7D9", fontSize: 10, letterSpacing: 2, marginTop: 10 },
   name: { color: "white", fontSize: 22, fontWeight: "bold", marginTop: 20 },
   role: { color: "#B7C6DD", marginTop: 8 },
@@ -286,31 +398,31 @@ const styles = StyleSheet.create({
   archive: { color: "white", fontWeight: "bold" },
   motto: { color: "#AFC6EB", marginTop: 14, fontSize: 11 },
   section: { color: "white", fontSize: 19, fontWeight: "bold", marginBottom: 15 },
-  stats: { flexDirection: "row", gap: 9, marginBottom: 30 },
+  stats: { flexDirection: "row", gap: 9, marginBottom: 25 },
   statCard: { flex: 1, backgroundColor: "#121C30", padding: 14, borderRadius: 15 },
   number: { color: "#D8E5FF", fontSize: 24, fontWeight: "bold" },
   statLabel: { color: "#B7C6DD", fontSize: 10, marginTop: 8 },
-  menu: { backgroundColor: "#121C30", padding: 19, borderRadius: 14, marginBottom: 10, flexDirection: "row", justifyContent: "space-between" },
-  menuText: { color: "white", fontSize: 13 },
-  arrow: { color: "#AFC6EB", fontSize: 20 },
+  button: { backgroundColor: "#263D5D", padding: 17, borderRadius: 14, marginBottom: 12 },
+  buttonText: { color: "white", textAlign: "center", fontWeight: "bold" },
   footer: { color: "#91A7C8", textAlign: "center", marginTop: 30, marginBottom: 25 },
   back: { color: "#AFC6EB", fontSize: 14, marginTop: 25 },
-  libraryHero: { backgroundColor: "#172744", padding: 20, borderRadius: 20, marginBottom: 20 },
-  search: { backgroundColor: "#121C30", borderWidth: 1, borderColor: "#31496D", color: "white", padding: 15, borderRadius: 13, marginBottom: 25 },
-  filters: { marginBottom: 25, flexGrow: 0 },
-  filter: { backgroundColor: "#172744", paddingVertical: 10, paddingHorizontal: 14, borderRadius: 20, marginRight: 8 },
+  libraryHero: { backgroundColor: "#172744", padding: 20, borderRadius: 20, marginBottom: 15 },
+  search: { backgroundColor: "#121C30", borderWidth: 1, borderColor: "#31496D", color: "white", padding: 15, borderRadius: 13, marginVertical: 20 },
+  filter: { backgroundColor: "#172744", paddingVertical: 10, paddingHorizontal: 14, borderRadius: 20, marginRight: 8, marginBottom: 10 },
   activeFilter: { backgroundColor: "#B5D0F7" },
   filterText: { color: "#B7C6DD", fontSize: 11 },
-  activeFilterText: { color: "#0B1020", fontWeight: "bold" },
-  resultRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  resultRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 15 },
   resultCount: { color: "#91A7C8", fontSize: 11 },
-  notice: { color: "#91A7C8", fontSize: 10, marginBottom: 14 },
-  certificate: { backgroundColor: "#121C30", borderWidth: 1, borderColor: "#24344F", padding: 14, borderRadius: 16, flexDirection: "row", alignItems: "center", marginBottom: 12 },
-  certificateIcon: { width: 42, height: 42, borderRadius: 12, backgroundColor: "#263D5D", alignItems: "center", justifyContent: "center", marginRight: 12 },
-  certificateIconText: { color: "#D8E5FF", fontSize: 20 },
+  certificate: { backgroundColor: "#121C30", borderWidth: 1, borderColor: "#24344F", padding: 16, borderRadius: 16, flexDirection: "row", alignItems: "center", marginBottom: 12 },
   certificateInfo: { flex: 1 },
-  certificateTitle: { color: "white", fontWeight: "bold", fontSize: 12, marginBottom: 6 },
-  provider: { color: "#91A7C8", fontSize: 10, marginBottom: 7 },
-  categoryTag: { color: "#B5D0F7", fontSize: 9 },
-  empty: { color: "#91A7C8", textAlign: "center", marginTop: 30 }
+  certificateTitle: { color: "white", fontWeight: "bold", fontSize: 13, marginBottom: 6 },
+  provider: { color: "#91A7C8", fontSize: 11, marginBottom: 7 },
+  categoryTag: { color: "#B5D0F7", fontSize: 10 },
+  arrow: { color: "#AFC6EB", fontSize: 20 },
+  empty: { color: "#91A7C8", textAlign: "center", marginTop: 30 },
+  fieldLabel: { color: "#B7C6DD", marginBottom: 8, marginTop: 15, fontWeight: "bold" },
+  input: { backgroundColor: "#121C30", borderWidth: 1, borderColor: "#31496D", color: "white", padding: 15, borderRadius: 13 },
+  categoryList: { flexDirection: "row", flexWrap: "wrap", marginTop: 5, marginBottom: 20 },
+  menuText: { color: "white", fontSize: 13 },
+  deleteButton: { backgroundColor: "#8B2635", padding: 17, borderRadius: 14, marginTop: 10 }
 });
